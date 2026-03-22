@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: papergrid-local:latest
-    container_name: papergrid
+    image: haku-ink/website:1.0
+    container_name: website
     ports:
       - "127.0.0.1:3000:3000"
     environment:
@@ -24,8 +24,8 @@ services:
       # EMAIL_UNSUBSCRIBE_SECRET: "change-this-secret"
       # EMAIL_REPLY_UNSUBSCRIBE_EXPIRE_DAYS: "365"
     volumes:
-      - papergrid_data:/data
+      - website_data:/data
     restart: unless-stopped
 
 volumes:
-  papergrid_data:
+  website_data:

@@ -45,8 +45,8 @@ mkdir -p ~/papergrid && cd ~/papergrid
 services:
   app:
 
-    image: ghcr.io/xywml/papergrid:latest
-    container_name: papergrid
+    image: haku-ink/website:1.0
+    container_name: website
     ports:
       - "127.0.0.1:6066:3000"
     environment:
@@ -77,7 +77,7 @@ services:
       NEXT_CACHE_DIR: "/data/.next-cache"
       MEDIA_ROOT: "/data/uploads"
     volumes:
-      - papergrid_data:/data
+      - website_data:/data
     logging:
       driver: "local"
       options:
@@ -86,7 +86,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  papergrid_data:
+  website_data:
 ```
 
 3. 首次启动：

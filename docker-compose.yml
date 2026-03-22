@@ -1,8 +1,8 @@
 services:
   app:
 
-    image: ghcr.io/xywml/papergrid:latest
-    container_name: papergrid
+    image:  ghcr.io/haku-ink/website:1.0
+    container_name: website
     ports:
       - "127.0.0.1:6066:3000"
     environment:
@@ -13,7 +13,7 @@ services:
       # 可选：AI 向量索引使用的 SQLite 日志模式，默认 DELETE（稳定优先）
       # SQLITE_JOURNAL_MODE: "DELETE"
       # 反向代理后必须改成你的公网地址（https://your-domain），否则登录会报 UntrustedHost
-      NEXTAUTH_URL: "http://localhost:6066"
+      NEXTAUTH_URL: "https://hakuink:6066"
       # 仅本地开发可开启（生产环境不要设置）
       AUTH_TRUST_HOST: "1"
       # 可选：启用 /api/init（一次性），必须设置且仅通过请求头 x-init-token 传入
@@ -33,7 +33,7 @@ services:
       NEXT_CACHE_DIR: "/data/.next-cache"
       MEDIA_ROOT: "/data/uploads"
     volumes:
-      - papergrid_data:/data
+      - website_data:/data
     logging:
       driver: "local"
       options:
@@ -42,4 +42,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  papergrid_data:
+  website_data:

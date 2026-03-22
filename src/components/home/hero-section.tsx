@@ -20,7 +20,7 @@ export function HeroSection({ settings }: { settings?: Record<string, unknown> }
     '欢迎来到我的博客',
     '探索技术的无限可能',
     '记录成长的点点滴滴',
-    '分享代码与生活的美好'
+    '正在努力成为全栈开发着'
   ]
   const rawTitles = getStr('hero.typingTitles')
   const titles = rawTitles
