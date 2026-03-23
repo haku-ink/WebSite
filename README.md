@@ -31,7 +31,7 @@
 
 ## 快速开始
 
-### 方式一：Docker（推荐）
+### 方式一：Docker + Caddy 自动 HTTPS（推荐）
 
 1. 准备目录：
 
@@ -39,16 +39,15 @@
 mkdir -p ~/papergrid && cd ~/papergrid
 ```
 
-2. 创建 `docker-compose.yml`（内容如下，与当前镜像运行配置一致）：
+2. 创建 `docker-compose.yml`：
 
 ```yaml
 services:
   app:
-
-    image: haku-ink/website:1.0
+    image: ghcr.io/haku-ink/website:1.0
     container_name: website
-    ports:
-      - "127.0.0.1:6066:3000"
+    expose:
+      - "3000"
     environment:
       # 建议持久化到数据卷，避免容器重建丢数据
       DATABASE_URL: "file:/data/db.sqlite"
@@ -56,10 +55,11 @@ services:
       # AI_VECTOR_DATABASE_URL: "file:/data/ai-index.sqlite"
       # 可选：AI 向量索引使用的 SQLite 日志模式，默认 DELETE（稳定优先）
       # SQLITE_JOURNAL_MODE: "DELETE"
-      # 反向代理后必须改成你的公网地址（https://your-domain），否则登录会报 UntrustedHost
-      NEXTAUTH_URL: "http://localhost:6066"
-      # 仅本地开发可开启（生产环境不要设置）
-      AUTH_TRUST_HOST: "1"
+      # 必须改成你的公网 HTTPS 地址
+      NEXTAUTH_URL: "https://hakuink.site"
+      NEXT_PUBLIC_APP_URL: "https://hakuink.site"
+      # 请替换成随机长字符串
+      NEXTAUTH_SECRET: "replace-with-a-random-secret"
       # 可选：启用 /api/init（一次性），必须设置且仅通过请求头 x-init-token 传入
       # INIT_ADMIN_TOKEN: "请替换为随机字符串"
       # 可选：自定义 /api/init 创建的管理员初始密码（不设置则为 admin123）
@@ -84,22 +84,52 @@ services:
         max-size: "10m"
         max-file: "5"
     restart: unless-stopped
+  caddy:
+    image: caddy:2
+    container_name: website-caddy
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
 
 volumes:
   website_data:
+  caddy_data:
+  caddy_config:
 ```
 
-3. 首次启动：
+3. 创建 `Caddyfile`：
+
+```caddy
+hakuink.site, www.hakuink.site {
+    encode gzip zstd
+    reverse_proxy app:3000
+}
+```
+
+4. 首次启动：
 
 ```bash
 docker compose pull && docker compose up -d
 ```
 
-4. 更新到最新镜像：
+5. 更新到最新镜像：
 
 ```bash
 cd ~/papergrid && docker compose pull && docker compose up -d
 ```
+
+部署前请确认：
+
+- `hakuink.site` 和 `www.hakuink.site` 已解析到服务器公网 IP
+- 服务器和云安全组已放行 `80`、`443`
+- `NEXTAUTH_URL`、`NEXT_PUBLIC_APP_URL` 已改成你的真实 `https://域名`
 
 默认管理员账号：
 - 邮箱：`admin@example.com`
@@ -136,7 +166,7 @@ DATABASE_URL="file:./dev.db"
 # 可选：AI 向量索引使用的 SQLite 日志模式；默认 DELETE（稳定优先）
 # SQLITE_JOURNAL_MODE="DELETE"
 
-NEXTAUTH_URL="http://localhost:6066"
+NEXTAUTH_URL="https://your-domain.com"
 NEXTAUTH_SECRET="your-secret-key-change-this-in-production"
 
 # Local media storage
@@ -173,10 +203,17 @@ EMAIL_REPLY_UNSUBSCRIBE_EXPIRE_DAYS="365"
 GOTIFY_URL=""
 GOTIFY_TOKEN=""
 
-NEXT_PUBLIC_APP_URL="http://localhost:6066"
+NEXT_PUBLIC_APP_URL="https://your-domain.com"
 NEXT_PUBLIC_DEFAULT_LOCALE="zh"
 # 可选：日志级别（fatal/error/warn/info/debug/trace/silent）
 # LOG_LEVEL="info"
+```
+
+本地开发时可改回：
+
+```env
+NEXTAUTH_URL="http://localhost:3000"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
 
 OAuth 回调填写（GitHub/Google）：
@@ -184,8 +221,8 @@ OAuth 回调填写（GitHub/Google）：
 - GitHub `Authorization callback URL` 固定为：`{站点地址}/api/auth/callback/github`
 - Google `Authorized redirect URI` 固定为：`{站点地址}/api/auth/callback/google`
 - 本地开发示例：
-  - GitHub 回调：`http://localhost:6066/api/auth/callback/github`
-  - Google 回调：`http://localhost:6066/api/auth/callback/google`
+  - GitHub 回调：`http://localhost:3000/api/auth/callback/github`
+  - Google 回调：`http://localhost:3000/api/auth/callback/google`
 - `NEXTAUTH_URL` 必须与 OAuth 平台里配置的站点地址一致（协议、域名、端口都要一致）
 
 SMTP 邮件通知说明：
@@ -229,7 +266,7 @@ SMTP 邮件通知说明：
 
 ### Nginx 防盗链（valid_referers 起步）
 
-可在反向代理中对 `/api/files/` 增加防盗链：
+如果你不用内置的 Caddy，而是自己在前面挂 Nginx，可对 `/api/files/` 增加防盗链：
 
 ```nginx
 location ^~ /api/files/ {
@@ -239,7 +276,7 @@ location ^~ /api/files/ {
         return 403;
     }
 
-    proxy_pass http://127.0.0.1:6066;
+    proxy_pass http://127.0.0.1:3000;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -287,11 +324,11 @@ client_max_body_size 10m;
 
 ```bash
 # 列表
-curl -X GET "http://localhost:6066/api/plugin/posts?page=1&limit=10" \
+curl -X GET "https://your-domain.com/api/plugin/posts?page=1&limit=10" \
   -H "x-api-key: eak_your_key"
 
 # 创建
-curl -X POST "http://localhost:6066/api/plugin/posts" \
+curl -X POST "https://your-domain.com/api/plugin/posts" \
   -H "Content-Type: application/json" \
   -H "x-api-key: eak_your_key" \
   -d '{
@@ -305,7 +342,7 @@ curl -X POST "http://localhost:6066/api/plugin/posts" \
   }'
 
 # 更新（替换 :id）
-curl -X PATCH "http://localhost:6066/api/plugin/posts/:id" \
+curl -X PATCH "https://your-domain.com/api/plugin/posts/:id" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer eak_your_key" \
   -d '{
@@ -315,7 +352,7 @@ curl -X PATCH "http://localhost:6066/api/plugin/posts/:id" \
   }'
 
 # 删除（替换 :id）
-curl -X DELETE "http://localhost:6066/api/plugin/posts/:id" \
+curl -X DELETE "https://your-domain.com/api/plugin/posts/:id" \
   -H "x-api-key: eak_your_key"
 ```
 
