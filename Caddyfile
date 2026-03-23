@@ -1,4 +1,0 @@
-hakuink.site, www.hakuink.site {
-    encode gzip zstd
-    reverse_proxy app:3000
-}
