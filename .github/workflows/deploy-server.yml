@@ -10,22 +10,22 @@ concurrency:
   group: deploy-production
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   deploy:
-    name: 同步代码并重启服务
+    name: 拉取镜像并部署到服务器
     runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/haku-ink/website
 
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 构建部署镜像
-        run: docker build -t website:1.0 .
-
-      - name: 导出部署镜像
-        run: docker save website:1.0 | gzip > website-image.tar.gz
-
-      - name: 同步代码到服务器
+      - name: 同步部署文件到服务器
         uses: easingthemes/ssh-deploy@v5.1.0
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
@@ -48,16 +48,6 @@ jobs:
             --exclude=*.tar
             --exclude=*.tar.gz
 
-      - name: 上传部署镜像到服务器
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_PORT || 22 }}
-          source: website-image.tar.gz
-          target: ${{ secrets.SERVER_PATH }}
-
       - name: 服务器部署
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -76,10 +66,13 @@ jobs:
             NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
             EOF
 
-            gzip -dc website-image.tar.gz | docker load
-            rm -f website-image.tar.gz
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            docker pull "${{ env.IMAGE }}:${{ github.sha }}"
+            docker tag "${{ env.IMAGE }}:${{ github.sha }}" "${{ env.IMAGE }}:main"
 
             docker compose down || true
-            docker compose --env-file .env.runtime up -d --no-build
+            docker compose --env-file .env.runtime pull
+            docker compose --env-file .env.runtime up -d
             rm -f .env.runtime
+            docker logout ghcr.io || true
             docker image prune -f

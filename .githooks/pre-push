@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+IMAGE="${IMAGE:-ghcr.io/haku-ink/website}"
+PLATFORM="${PLATFORM:-linux/amd64}"
+BRANCH="${DEPLOY_BRANCH:-main}"
+
+if [[ "${SKIP_GHCR_PUSH:-0}" == "1" ]]; then
+  echo "[pre-push] SKIP_GHCR_PUSH=1，跳过镜像构建与推送"
+  exit 0
+fi
+
+should_release=0
+while read -r local_ref _remote_sha remote_ref _local_sha; do
+  if [[ "${local_ref}" == "refs/heads/${BRANCH}" || "${remote_ref}" == "refs/heads/${BRANCH}" ]]; then
+    should_release=1
+    break
+  fi
+done
+
+if [[ "${should_release}" != "1" ]]; then
+  echo "[pre-push] 当前 push 不包含 ${BRANCH}，跳过镜像发布"
+  exit 0
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "[pre-push] 未找到 docker 命令" >&2
+  exit 1
+fi
+
+if ! docker buildx version >/dev/null 2>&1; then
+  echo "[pre-push] 当前 Docker 不支持 buildx，请先安装或升级 Docker Desktop" >&2
+  exit 1
+fi
+
+GIT_SHA="$(git -C "${ROOT_DIR}" rev-parse HEAD)"
+VERSION="$(node -p "require('${ROOT_DIR}/package.json').version")"
+VERSION_TAG="${VERSION}"
+if [[ "${VERSION_TAG}" != v* ]]; then
+  VERSION_TAG="v${VERSION_TAG}"
+fi
+
+echo "[pre-push] 发布镜像 ${IMAGE}:main"
+echo "[pre-push] 发布镜像 ${IMAGE}:${GIT_SHA}"
+echo "[pre-push] 发布镜像 ${IMAGE}:${VERSION_TAG}"
+echo "[pre-push] 目标平台 ${PLATFORM}"
+
+docker buildx build \
+  --platform "${PLATFORM}" \
+  --build-arg APP_VERSION="${VERSION}" \
+  -t "${IMAGE}:main" \
+  -t "${IMAGE}:${GIT_SHA}" \
+  -t "${IMAGE}:${VERSION_TAG}" \
+  --push \
+  "${ROOT_DIR}"

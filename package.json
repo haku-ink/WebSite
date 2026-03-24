@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "hooks:install": "bash scripts/install-git-hooks.sh",
     "db:prepare": "node scripts/prepare-db.mjs",
     "db:seed": "tsx prisma/seed.ts"
   },

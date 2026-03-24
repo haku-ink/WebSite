@@ -1,8 +1,6 @@
 services:
   app:
-    build:
-      context: .
-    image: website:1.0
+    image: ghcr.io/haku-ink/website:main
     container_name: website
     ports:
       - "80:3000"
